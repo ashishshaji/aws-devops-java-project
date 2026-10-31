@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2048</title>
+<style>
+  :root { --bg:#faf8ef; --board:#bbada0; --cell:#cdc1b4; --text:#776e65; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Clear Sans","Helvetica Neue",Arial,sans-serif;
+         display:flex; flex-direction:column; align-items:center; padding:24px 12px; touch-action:none; }
+  .wrap { width:min(92vw,460px); }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  h1 { font-size:56px; margin:0; }
+  .scores { display:flex; gap:8px; }
+  .box { background:var(--board); color:#fff; border-radius:6px; padding:6px 14px; text-align:center; min-width:70px; }
+  .box small { display:block; font-size:11px; text-transform:uppercase; color:#eee4da; }
+  .box b { font-size:20px; }
+  .bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  button { background:#8f7a66; color:#f9f6f2; border:0; border-radius:6px; padding:10px 18px; font-size:15px; font-weight:bold; cursor:pointer; }
+  .board { position:relative; background:var(--board); border-radius:8px; padding:10px; aspect-ratio:1;
+           display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .cell { background:var(--cell); border-radius:5px; display:flex; align-items:center; justify-content:center;
+          font-weight:bold; font-size:clamp(22px,7vw,38px); transition:background .1s; }
+  .v2{background:#eee4da} .v4{background:#ede0c8}
+  .v8{background:#f2b179;color:#f9f6f2} .v16{background:#f59563;color:#f9f6f2}
+  .v32{background:#f67c5f;color:#f9f6f2} .v64{background:#f65e3b;color:#f9f6f2}
+  .v128{background:#edcf72;color:#f9f6f2;font-size:clamp(20px,6vw,32px)}
+  .v256{background:#edcc61;color:#f9f6f2;font-size:clamp(20px,6vw,32px)}
+  .v512{background:#edc850;color:#f9f6f2;font-size:clamp(20px,6vw,32px)}
+  .v1024{background:#edc53f;color:#f9f6f2;font-size:clamp(16px,5vw,26px)}
+  .v2048{background:#edc22e;color:#f9f6f2;font-size:clamp(16px,5vw,26px)}
+  .vbig{background:#3c3a32;color:#f9f6f2;font-size:clamp(14px,4.5vw,24px)}
+  .overlay { position:absolute; inset:0; background:rgba(238,228,218,.75); border-radius:8px; display:none;
+             flex-direction:column; align-items:center; justify-content:center; gap:14px; font-size:36px; font-weight:bold; }
+  .overlay.show { display:flex; }
+  p.help { font-size:14px; margin-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>2048</h1>
+    <div class="scores">
+      <div class="box"><small>Score</small><b id="score">0</b></div>
+      <div class="box"><small>Best</small><b id="best">0</b></div>
+    </div>
+  </header>
+  <div class="bar">
+    <span>Join the tiles, reach <b>2048</b>!</span>
+    <button id="new">New Game</button>
+  </div>
+  <div class="board" id="board">
+    <div class="overlay" id="overlay"><span id="msg"></span><button id="retry">Try again</button></div>
+  </div>
+  <p class="help">Use arrow keys / WASD, or swipe on touch screens.</p>
+</div>
+
+<script>
+const boardEl = document.getElementById('board');
+const overlay = document.getElementById('overlay');
+let busy = false;
+
+function render(s) {
+  boardEl.querySelectorAll('.cell').forEach(c => c.remove());
+  s.board.flat().forEach(v => {
+    const d = document.createElement('div');
+    d.className = 'cell' + (v ? ' ' + (v > 2048 ? 'vbig' : 'v' + v) : '');
+    d.textContent = v || '';
+    boardEl.insertBefore(d, overlay);
+  });
+  document.getElementById('score').textContent = s.score;
+  document.getElementById('best').textContent = s.best;
+  document.getElementById('msg').textContent = s.over ? 'Game over!' : '';
+  overlay.classList.toggle('show', s.over);
+}
+
+async function call(path, method = 'GET') {
+  const r = await fetch('/api/game/' + path, { method });
+  return r.json();
+}
+async function move(dir) {
+  if (busy) return;
+  busy = true;
+  try { render(await call('move/' + dir, 'POST')); } finally { busy = false; }
+}
+async function newGame() { render(await call('new', 'POST')); }
+
+document.getElementById('new').onclick = newGame;
+document.getElementById('retry').onclick = newGame;
+
+const keys = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right' };
+document.addEventListener('keydown', e => {
+  const dir = keys[e.key];
+  if (dir) { e.preventDefault(); move(dir); }
+});
+
+let sx, sy;
+document.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
+  move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+});
+
+call('state').then(render);
+</script>
+</body>
+</html>
