@@ -1,0 +1,66 @@
+name: Java CI/CD with Maven
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build and test with Maven
+        run: mvn -B clean package --file pom.xml
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: game2048-jar
+          path: target/game2048-0.0.1-SNAPSHOT.jar
+
+  CD:
+    needs: CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: game2048-jar
+          path: ./dist
+
+      - name: Copy JAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "dist/game2048-0.0.1-SNAPSHOT.jar"
+          target: "/home/${{ vars.VM_USER }}/game2048"
+          strip_components: 1
+
+      - name: Restart application on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd ~/game2048
+            if [ -f app.pid ] && kill -0 "$(cat app.pid)" 2>/dev/null; then
+              kill "$(cat app.pid)"
+              sleep 3
+            fi
+            nohup java -jar game2048-0.0.1-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
+            echo $! > app.pid
+            sleep 5
+            tail -n 20 app.log

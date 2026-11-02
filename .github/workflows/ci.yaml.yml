@@ -2,8 +2,9 @@ name: Java CI with Maven
 
 # This workflow triggers on pushes and pull requests to the main branch
 on:
-  push:
-    branches: [ "master" ]
+  workflow_dispatch:
+  # push:
+  #   branches: [ "master" ]
 #  pull_request:
 #    branches: [ "main", "master" ]
 
