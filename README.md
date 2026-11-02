@@ -7,7 +7,7 @@ Developer --git push--> GitHub Actions (build + test) --SSH/SCP--> AWS EC2 (Java
 ```
 
 
-# Architecture
+## Architecture
 
 <img src="../resources/images/aws_ec2_deployment_architecture.svg" 
    alt="Architecture diagram EC2 GH action." 
