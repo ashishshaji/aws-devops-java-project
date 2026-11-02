@@ -2,7 +2,7 @@ name: Java CI/CD with Maven
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -28,12 +28,13 @@ jobs:
           name: game2048-jar
           path: target/game2048-0.0.1-SNAPSHOT.jar
 
-      - name: Write CI GitHub Summary
+      - name: Add build summary to GitHub Actions
         run: |
-          echo "## 🏗️ Build & Test Phase" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Java Version:** 17 (Temurin)" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Maven Build:** Successful" >> $GITHUB_STEP_SUMMARY
-          echo "📦 **Artifact:** \`game2048-jar\` uploaded and ready for deployment." >> $GITHUB_STEP_SUMMARY
+          echo "## 🔨 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "------------------" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build Status: success" >> $GITHUB_STEP_SUMMARY
+          echo "📦 JAR Artifact: game2048-0.0.1-SNAPSHOT.jar" >> $GITHUB_STEP_SUMMARY
+          echo "🕒 Build Time: $(date)" >> $GITHUB_STEP_SUMMARY
 
   CD:
     needs: CI
@@ -45,6 +46,23 @@ jobs:
           name: game2048-jar
           path: ./dist
 
+      - name: Stop application if running
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            mkdir -p ~/game2048
+            if [ -f ~/game2048/app.pid ] && kill -0 "$(cat ~/game2048/app.pid)" 2>/dev/null; then
+              echo "Application is running. Stopping it..."
+              kill "$(cat ~/game2048/app.pid)"
+              sleep 3
+              echo "Application stopped."
+            else
+              echo "Application is not running."
+            fi
+
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -55,7 +73,7 @@ jobs:
           target: "/home/${{ vars.VM_USER }}/game2048"
           strip_components: 1
 
-      - name: Restart application on EC2
+      - name: Start application on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.VM_HOST }}
@@ -63,33 +81,17 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd ~/game2048
-            
-            echo "Checking for running application..."
-            
-            # 1. Try graceful shutdown using the PID file
-            if [ -f app.pid ] && kill -0 "$(cat app.pid)" 2>/dev/null; then
-              echo "Stopping process $(cat app.pid)..."
-              kill "$(cat app.pid)"
-              sleep 3
-            fi
-            
-            # 2. Fallback: Kill any lingering Java processes matching the JAR name
-            if pgrep -f 'java -jar game2048' > /dev/null; then
-              echo "Found orphaned process. Forcing shutdown..."
-              pkill -f 'java -jar game2048'
-              sleep 3
-            fi
-            
-            echo "Starting new application..."
             nohup java -jar game2048-0.0.1-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
             echo $! > app.pid
-            
             sleep 5
             tail -n 20 app.log
 
-      - name: Write CD GitHub Summary
+      - name: Add deployment summary to GitHub Actions
         run: |
-          echo "## 🚀 Deployment Phase" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Target Server:** \`${{ vars.VM_HOST }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Deployment Path:** \`/home/${{ vars.VM_USER }}/game2048\`" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Status:** Previous instances stopped. New application started in the background." >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "------------------" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Deployed JAR: game2048-0.0.1-SNAPSHOT.jar" >> $GITHUB_STEP_SUMMARY
+          echo "🖥️ EC2 Host: ${{ vars.VM_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "👤 User: ${{ vars.VM_USER }}" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 URL: http://${{ vars.VM_HOST }}:8080" >> $GITHUB_STEP_SUMMARY
+          echo "🕒 Deployment Time: $(date)" >> $GITHUB_STEP_SUMMARY
