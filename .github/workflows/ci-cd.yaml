@@ -28,6 +28,13 @@ jobs:
           name: game2048-jar
           path: target/game2048-0.0.1-SNAPSHOT.jar
 
+      - name: Write CI GitHub Summary
+        run: |
+          echo "## 🏗️ Build & Test Phase" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Java Version:** 17 (Temurin)" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Maven Build:** Successful" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **Artifact:** \`game2048-jar\` uploaded and ready for deployment." >> $GITHUB_STEP_SUMMARY
+
   CD:
     needs: CI
     runs-on: ubuntu-latest
@@ -56,11 +63,33 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd ~/game2048
+            
+            echo "Checking for running application..."
+            
+            # 1. Try graceful shutdown using the PID file
             if [ -f app.pid ] && kill -0 "$(cat app.pid)" 2>/dev/null; then
+              echo "Stopping process $(cat app.pid)..."
               kill "$(cat app.pid)"
               sleep 3
             fi
+            
+            # 2. Fallback: Kill any lingering Java processes matching the JAR name
+            if pgrep -f 'java -jar game2048' > /dev/null; then
+              echo "Found orphaned process. Forcing shutdown..."
+              pkill -f 'java -jar game2048'
+              sleep 3
+            fi
+            
+            echo "Starting new application..."
             nohup java -jar game2048-0.0.1-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
             echo $! > app.pid
+            
             sleep 5
             tail -n 20 app.log
+
+      - name: Write CD GitHub Summary
+        run: |
+          echo "## 🚀 Deployment Phase" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Target Server:** \`${{ vars.VM_HOST }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Deployment Path:** \`/home/${{ vars.VM_USER }}/game2048\`" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Status:** Previous instances stopped. New application started in the background." >> $GITHUB_STEP_SUMMARY
