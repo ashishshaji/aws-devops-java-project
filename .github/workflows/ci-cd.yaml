@@ -83,8 +83,14 @@ jobs:
             cd ~/game2048
             nohup java -jar game2048-0.0.1-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
             echo $! > app.pid
-            sleep 5
-            tail -n 20 app.log
+            sleep 10
+            if kill -0 "$(cat app.pid)" 2>/dev/null; then
+              echo "Application started."
+            else
+              echo "Application failed to start:"
+              tail -n 30 app.log
+              exit 1
+            fi
 
       - name: Add deployment summary to GitHub Actions
         run: |
